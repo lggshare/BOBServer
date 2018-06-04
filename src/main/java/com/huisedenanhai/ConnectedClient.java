@@ -15,6 +15,7 @@ import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.Calendar;
 
 public class ConnectedClient {
@@ -29,14 +30,29 @@ public class ConnectedClient {
 
     private OutputStream outputStream;
 
+    private final ArrayList<ActionInterface> actions = new ArrayList<>();
+
+
+    /**
+     * Send all actions to server's action pool, and clear all actions in the list
+     */
+    private void pushAllActionsToPool() {
+        synchronized (this.actions) {
+            server.pushAllActionsToPool(actions);
+            actions.clear();
+        }
+    }
+
     /**
      * Close the connection, and do some cleanup
      */
     private void closeConnection() {
+        pushAllActionsToPool();
         server.removeConnectedClient(this);
         try {
-
             clientSocket.close();
+            inputStream.close();
+            outputStream.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -46,13 +62,25 @@ public class ConnectedClient {
     private static final int CID_LENGTH = 16;
     private static final int BUFFER_LENGTH = 512;
 
-    private JSONObject readClientResponse() throws IOException {
+    /**
+     * Read request from client
+     *
+     * @return the decoded JSONObject
+     * @throws IOException
+     */
+    private JSONObject readClientRequest() throws IOException {
         byte[] buffer = new byte[BUFFER_LENGTH];
         inputStream.read(buffer);
         return new JSONObject(new String(buffer, Config.DEFAULT_CHARSET));
     }
 
-    private void sendJsonMessage(JSONObject jsonObject) throws IOException {
+    /**
+     * Send json to client
+     *
+     * @param jsonObject the json object to sent
+     * @throws IOException
+     */
+    private void sendJsonResponse(JSONObject jsonObject) throws IOException {
         outputStream.write((jsonObject.toString() + "\r\n").getBytes(Config.DEFAULT_CHARSET));
     }
 
@@ -70,9 +98,9 @@ public class ConnectedClient {
             jsonObject.put("time", Calendar.getInstance().getTimeInMillis());
             jsonObject.put("id", id);
             jsonObject.put("cid", cid);
-            sendJsonMessage(jsonObject);
+            sendJsonResponse(jsonObject);
 
-            JSONObject jsonResponse = readClientResponse();
+            JSONObject jsonResponse = readClientRequest();
             System.out.println(jsonResponse);
             // check consistency
             if (!"checking-response".equals(jsonResponse.getString("method"))) {
@@ -93,19 +121,37 @@ public class ConnectedClient {
         return true;
     }
 
+    /**
+     * Append action to list
+     * This method is thread safe
+     *
+     * @param action the action to be appended
+     */
+    private void appendActionToList(ActionInterface action) {
+        synchronized (this.actions) {
+            actions.add(action);
+        }
+    }
+
     private void serve() {
         while (true) {
-//            try {
-//                Thread.sleep(200);
-//                outputStream.write("Hello".getBytes());
-//            } catch (InterruptedException e) {
-//                e.printStackTrace();
-//            } catch (IOException e) {
-//                // Fail to write, close connection
-//                e.printStackTrace();
-//                closeConnection();
-//                break;
-//            }
+            try {
+                JSONObject request = readClientRequest();
+                System.out.println(request);
+                String method = request.getString("method");
+                if ("action".equals(method)) {
+                    Action action = new Action();
+                    action.parseJSON(request);
+                    appendActionToList(action);
+                } else if ("disconnect".equals(method)) {
+                    closeConnection();
+                    break;
+                }
+            } catch (IOException | JSONException ex) {
+                ex.printStackTrace();
+                closeConnection();
+                break;
+            }
         }
     }
 

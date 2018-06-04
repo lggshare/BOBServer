@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Collection;
 
 public class BOBServer {
 
@@ -19,6 +20,21 @@ public class BOBServer {
     private int nextId = 0;
 
     private final ArrayList<ConnectedClient> connectedClients = new ArrayList<>();
+
+    private final ArrayList<ActionInterface> actionPool = new ArrayList<>();
+
+    /**
+     * Push all actions into the action pool
+     * Action pool stores all the actions that will be send to the model for calculation
+     * It should be noticed that this method will do nothing on the model
+     *
+     * @param actions actions to be added
+     */
+    public void pushAllActionsToPool(Collection<ActionInterface> actions) {
+        synchronized (this.actionPool) {
+            actionPool.addAll(actions);
+        }
+    }
 
     /**
      * Add a connected client
