@@ -33,6 +33,7 @@ public class BOBServer {
     public void pushAllActionsToPool(Collection<ActionInterface> actions) {
         synchronized (this.actionPool) {
             actionPool.addAll(actions);
+            System.out.println("Current action count: " + actionPool.size());
         }
     }
 

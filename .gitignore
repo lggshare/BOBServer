@@ -1,6 +1,5 @@
 build
 out
-gradle
 .gradle
 .idea
 *.DS_Store
