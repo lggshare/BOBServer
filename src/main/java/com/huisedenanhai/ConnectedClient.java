@@ -30,7 +30,7 @@ public class ConnectedClient {
 
     private OutputStream outputStream;
 
-    private final ArrayList<ActionInterface> actions = new ArrayList<>();
+    private final ArrayList<JSONSerializable> actions = new ArrayList<>();
 
 
     /**
@@ -127,7 +127,7 @@ public class ConnectedClient {
      *
      * @param action the action to be appended
      */
-    private void appendActionToList(ActionInterface action) {
+    private void appendActionToList(JSONSerializable action) {
         synchronized (this.actions) {
             actions.add(action);
         }

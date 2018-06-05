@@ -7,7 +7,7 @@ import org.json.JSONObject;
  * The temporary implementation of action
  * This class need future modify
  */
-public class Action implements ActionInterface {
+public class Action implements JSONSerializable {
 
     private long time;
     private int id;

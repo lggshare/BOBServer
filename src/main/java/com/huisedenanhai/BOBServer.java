@@ -21,7 +21,7 @@ public class BOBServer {
 
     private final ArrayList<ConnectedClient> connectedClients = new ArrayList<>();
 
-    private final ArrayList<ActionInterface> actionPool = new ArrayList<>();
+    private final ArrayList<JSONSerializable> actionPool = new ArrayList<>();
 
     /**
      * Push all actions into the action pool
@@ -30,7 +30,7 @@ public class BOBServer {
      *
      * @param actions actions to be added
      */
-    public void pushAllActionsToPool(Collection<ActionInterface> actions) {
+    public void pushAllActionsToPool(Collection<JSONSerializable> actions) {
         synchronized (this.actionPool) {
             actionPool.addAll(actions);
             System.out.println("Current action count: " + actionPool.size());
@@ -85,7 +85,9 @@ public class BOBServer {
         while (true) {
             try {
                 Socket clientSocket = serverSocket.accept();
-                new ConnectedClient(generateId(), clientSocket, this);
+                if (getConnectionCount() < Config.MAX_CONNECTION) {
+                    new ConnectedClient(generateId(), clientSocket, this);
+                }
             } catch (IOException ex) {
                 ex.printStackTrace();
             }
