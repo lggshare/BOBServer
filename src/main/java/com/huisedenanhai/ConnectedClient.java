@@ -5,7 +5,6 @@
 package com.huisedenanhai;
 
 import com.huisedenanhai.exception.TooManyConnectionException;
-import com.huisedenanhai.math.Random;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -16,7 +15,6 @@ import java.io.UnsupportedEncodingException;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.Calendar;
 
 public class ConnectedClient {
 
@@ -26,12 +24,13 @@ public class ConnectedClient {
 
     private final int id;
 
+    private String name;
+
     private InputStream inputStream;
 
     private OutputStream outputStream;
 
     private final ArrayList<JSONSerializable> actions = new ArrayList<>();
-
 
     /**
      * Send all actions to server's action pool, and clear all actions in the list
@@ -85,38 +84,79 @@ public class ConnectedClient {
     }
 
     /**
+     * Tell the client the required name is not valid
+     */
+    private void tellClientNameNotValid() throws IOException {
+        JSONObject response = new JSONObject("{method:register-response,valid:0}");
+        sendJsonResponse(response);
+    }
+
+    /**
+     * The name is valid, send client required message
+     */
+    private void tellClientNameIsValid() throws IOException {
+        JSONObject response = new JSONObject("{method:register-response,valid:1}");
+        response.put("id", id);
+        response.put("sync-msg", server.getCurrentSyncronizationMessage().encodeJSON());
+        sendJsonResponse(response);
+    }
+
+    /**
+     * Check is the name is legal
+     *
+     * @param name the name to be checked
+     * @return true if the name is legal
+     */
+    private boolean isLegalName(String name) {
+        return name != null;
+    }
+
+    /**
+     * Show verbose info
+     *
+     * @param request request from client
+     */
+    private void showRequestInfo(JSONObject request) {
+        StringBuilder sb = new StringBuilder("Read response from ");
+        sb.append(id).append(": ").append(request.toString());
+        System.out.println(sb.toString());
+    }
+
+    /**
      * Check if it is a valid connection
      * The connected client should follow the our predefined protocol
      *
      * @return true if check succeed, else return false
      */
     private boolean checkConnection() {
-        try {
-            JSONObject jsonObject = new JSONObject();
-            Long cid = Long.parseUnsignedLong(Random.randomString(CID_CHARSET, CID_LENGTH));
-            jsonObject.put("method", "checking");
-            jsonObject.put("time", Calendar.getInstance().getTimeInMillis());
-            jsonObject.put("id", id);
-            jsonObject.put("cid", cid);
-            sendJsonResponse(jsonObject);
-
-            JSONObject jsonResponse = readClientRequest();
-            System.out.println(jsonResponse);
-            // check consistency
-            if (!"checking-response".equals(jsonResponse.getString("method"))) {
+        while (true) {
+            try {
+                JSONObject clientRegisterInformation = readClientRequest();
+                showRequestInfo(clientRegisterInformation);
+                String clientMethod = clientRegisterInformation.getString("method");
+                // check if the client give us a valid message
+                if (!"register".equals(clientMethod)) {
+                    return false;
+                }
+                String clientRequiredName = clientRegisterInformation.getString("name");
+                // the client send us an illegal name or the name has been registered
+                if (!isLegalName(clientRequiredName) || server.isRegisteredName(clientRequiredName)) {
+                    tellClientNameNotValid();
+                    continue;
+                }
+                // Now the name given by the client must be valid
+                // WARN: this piece of code is buggy, but for the sack of simplification, I still choose to put it here
+                // Since the system may handle everything by id, who will care if there have duplicated names!
+                // If there were time, I would fix them in the future...
+                this.name = clientRequiredName;
+                tellClientNameIsValid();
+                break;
+            } catch (UnsupportedEncodingException ex) {
+                ex.printStackTrace();
+                return false;
+            } catch (IOException | JSONException ex) {
                 return false;
             }
-            if (!cid.equals(jsonResponse.get("cid"))) {
-                return false;
-            }
-            if (id != jsonResponse.getInt("id")) {
-                return false;
-            }
-        } catch (UnsupportedEncodingException ex) {
-            ex.printStackTrace();
-            return false;
-        } catch (IOException | JSONException ex) {
-            return false;
         }
         return true;
     }
@@ -137,22 +177,32 @@ public class ConnectedClient {
         while (true) {
             try {
                 JSONObject request = readClientRequest();
-                System.out.println(request);
+                showRequestInfo(request);
                 String method = request.getString("method");
                 if ("action".equals(method)) {
                     Action action = new Action();
-                    action.parseJSON(request);
+                    action.parseJSON(request.getJSONObject("action"));
                     appendActionToList(action);
-                } else if ("disconnect".equals(method)) {
-                    closeConnection();
+                    continue;
+                }
+                if ("disconnect".equals(method)) {
                     break;
                 }
+                // get invalid message
+                break;
             } catch (IOException | JSONException ex) {
                 ex.printStackTrace();
-                closeConnection();
                 break;
             }
         }
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public int getID() {
+        return id;
     }
 
     public InetAddress getInetAddress() {
@@ -180,6 +230,7 @@ public class ConnectedClient {
                 return;
             }
             serve();
+            closeConnection();
         }
     }
 

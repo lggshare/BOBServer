@@ -32,7 +32,6 @@ public class Action implements JSONSerializable {
         return jsonAction;
     }
 
-    @Override
     public Long getTime() {
         return time;
     }

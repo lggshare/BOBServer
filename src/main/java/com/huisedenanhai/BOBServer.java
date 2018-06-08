@@ -5,7 +5,9 @@
 package com.huisedenanhai;
 
 import com.huisedenanhai.exception.BadServerSocketException;
+import com.huisedenanhai.exception.NotLegalNameException;
 import com.huisedenanhai.exception.TooManyConnectionException;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -22,6 +24,37 @@ public class BOBServer {
     private final ArrayList<ConnectedClient> connectedClients = new ArrayList<>();
 
     private final ArrayList<JSONSerializable> actionPool = new ArrayList<>();
+
+    /**
+     * Get current syncronization message
+     *
+     * @return
+     */
+    public SyncronizationMessage getCurrentSyncronizationMessage() {
+//        throw new NotImplementedException();
+        return new SyncronizationMessage();
+    }
+
+    /**
+     * Check if a name has been registered
+     *
+     * @param name the name to be checked, if the name is null, NotLegalNameException will be thrown
+     * @return true if the name has already been registered, else return false
+     */
+    public boolean isRegisteredName(String name) {
+        if (name == null) {
+            throw new NotLegalNameException();
+        }
+        synchronized (this.connectedClients) {
+            for (ConnectedClient client : connectedClients) {
+                String clientName = client.getName();
+                if (name.equals(clientName)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
 
     /**
      * Push all actions into the action pool
