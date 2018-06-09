@@ -35,7 +35,7 @@ public class ConnectedClient {
     /**
      * Send all actions to server's action pool, and clear all actions in the list
      */
-    private void pushAllActionsToPool() {
+    public void pushAllActionsToPool() {
         synchronized (this.actions) {
             server.pushAllActionsToPool(actions);
             actions.clear();
@@ -79,7 +79,7 @@ public class ConnectedClient {
      * @param jsonObject the json object to sent
      * @throws IOException
      */
-    private void sendJsonResponse(JSONObject jsonObject) throws IOException {
+    public void sendJsonResponse(JSONObject jsonObject) throws IOException {
         outputStream.write((jsonObject.toString() + "\r\n").getBytes(Config.DEFAULT_CHARSET));
     }
 

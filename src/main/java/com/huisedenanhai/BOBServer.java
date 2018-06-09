@@ -7,13 +7,14 @@ package com.huisedenanhai;
 import com.huisedenanhai.exception.BadServerSocketException;
 import com.huisedenanhai.exception.NotLegalNameException;
 import com.huisedenanhai.exception.TooManyConnectionException;
+import org.json.JSONObject;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.Collection;
+import java.sql.Time;
+import java.util.*;
 
 public class BOBServer {
 
@@ -25,14 +26,37 @@ public class BOBServer {
 
     private final ArrayList<JSONSerializable> actionPool = new ArrayList<>();
 
+    private final ServerModel serverModel = new ServerModel();
+
+    private final BroadcastTask broadcastTask = new BroadcastTask();
+
     /**
      * Get current syncronization message
      *
      * @return
      */
     public SyncronizationMessage getCurrentSyncronizationMessage() {
-//        throw new NotImplementedException();
-        return new SyncronizationMessage();
+        synchronized (this.connectedClients) {
+            for (ConnectedClient connectedClient: this.connectedClients) {
+                connectedClient.pushAllActionsToPool();
+            }
+        }
+        Map<Integer, Map<Long, String>> sampledActions = new HashMap<>();
+        synchronized (this.actionPool) {
+            for (JSONSerializable obj: this.actionPool) {
+                Action action = (Action) obj;
+                if (!sampledActions.containsKey(action.getID())) {
+                    sampledActions.put(action.getID(), new HashMap<>());
+                }
+                sampledActions.get(action.getID()).put(action.getTime(), action.getAction());
+            }
+            this.actionPool.clear();
+        }
+        synchronized (this.serverModel) {
+            serverModel.acceptAcceleration(new ServerToModel(sampledActions, true));
+            Status status = serverModel.getCurrentStatus(System.currentTimeMillis());
+            return new SyncronizationMessage(status);
+        }
     }
 
     /**
@@ -66,7 +90,7 @@ public class BOBServer {
     public void pushAllActionsToPool(Collection<JSONSerializable> actions) {
         synchronized (this.actionPool) {
             actionPool.addAll(actions);
-            System.out.println("Current action count: " + actionPool.size());
+//            System.out.println("Current action count: " + actionPool.size());
         }
     }
 
@@ -93,6 +117,9 @@ public class BOBServer {
      * @param client the connected client
      */
     public void removeConnectedClient(ConnectedClient client) {
+        synchronized (this.serverModel) {
+            this.serverModel.removeBall(client.getID());
+        }
         synchronized (this.connectedClients) {
             connectedClients.remove(client);
             System.out.println("Remove connection of: " + client.getInetAddress());
@@ -110,16 +137,38 @@ public class BOBServer {
         return nextId++;
     }
 
+    class BroadcastTask extends TimerTask {
+        @Override
+        public void run() {
+            SyncronizationMessage message = getCurrentSyncronizationMessage();
+            synchronized (connectedClients) {
+                for (ConnectedClient connectedClient: connectedClients) {
+                    try {
+                        connectedClient.sendJsonResponse(message.encodeJSON());
+                    } catch (IOException ex) {
+                        ex.printStackTrace();
+                    }
+                }
+            }
+        }
+    }
+
     /**
      * Start the server
      * Waiting for connections from clients
      */
     public void start() {
+        Timer timer = new Timer();
+        timer.schedule(broadcastTask, 0, 100);
         while (true) {
             try {
                 Socket clientSocket = serverSocket.accept();
                 if (getConnectionCount() < Config.MAX_CONNECTION) {
-                    new ConnectedClient(generateId(), clientSocket, this);
+                    int generatedID = generateId();
+                    synchronized (this.serverModel) {
+                        this.serverModel.addBall(generatedID);
+                    }
+                    new ConnectedClient(generatedID, clientSocket, this);
                 }
             } catch (IOException ex) {
                 ex.printStackTrace();
