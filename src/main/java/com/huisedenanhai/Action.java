@@ -11,7 +11,15 @@ public class Action implements JSONSerializable {
 
     private long time;
     private int id;
-    private String action; // in {"UP", "DOWN", "RIGHT", "LEFT"}
+
+    private String action; // 由"U", "D", "R", "L"组成的字符串。不区分大小写。 
+    /**
+     * 补充：
+     * 每种字母只能出现一次，否则会出现bug。
+     * 如果用户同时按下了多个键，可以单字母叠加，不论次序。
+     * 如“UL”和“LU”均代表同时按下了上、左键。
+     * 服务器的实现里，可以正确处理含“LR”“UD”的组合。
+     */
 
     public Action() {}
 
